@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Intelligence Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">
+            <div class="logo-icon">
+                <i class="fas fa-brain" style="color: white; font-size: 14px;"></i>
+            </div>
+            <span class="logo-text">Driver Monitor</span>
+        </div>
+        <div class="system-status">
+            <span id="uptime" style="color: var(--text-dim); font-size: 0.9rem;">Uptime: 00:00:00</span>
+        </div>
+    </header>
+
+    <main>
+        <!-- 🎥 Live Camera Feed -->
+        <section class="feed-container">
+            <img id="video-feed" src="/video" alt="Live Camera Feed">
+            
+            <div class="overlay-status">
+                <div class="status-dot" id="status-dot"></div>
+                <span id="connection-status">ACTIVE FEED</span>
+            </div>
+
+            <!-- Troubleshooting Overlay (hidden by default) -->
+            <div id="troubleshoot-overlay" class="overlay-center" style="display: none;">
+                <div class="card" style="background: rgba(0,0,0,0.8); border-color: var(--status-danger);">
+                    <h3 style="color: var(--status-danger); margin-bottom: 10px;">Camera Not Detected</h3>
+                    <p style="font-size: 0.9rem; color: var(--text-dim);">1. Check if camera is plugged in.<br>2. Close other apps using camera.<br>3. Try restarting the system.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 📊 Sidebar Metrics -->
+        <aside class="sidebar">
+            <div class="card" id="status-card">
+                <div class="card-label">System Health</div>
+                <div class="card-value" id="status-text" style="font-size: 1.25rem;">SCANNING...</div>
+                <div class="state-badge" id="status-badge">INITIALIZING</div>
+            </div>
+
+            <div class="card">
+                <div class="card-label">Driver State</div>
+                <div class="card-value" id="state">Detecting...</div>
+                <div class="state-badge" id="state-badge">MONITORING</div>
+            </div>
+
+            <div class="card">
+                <div class="card-label">Heart Rate</div>
+                <div class="heart-rate-box">
+                    <span class="card-value" id="hr">--</span>
+                    <span class="bpm-unit">BPM</span>
+                    <i class="fas fa-heart heart-icon" id="heart-pulse"></i>
+                </div>
+            </div>
+            
+            <!-- (Remaining cards kept as is) -->
+            <div class="card">
+                <div class="card-label">Eye Aspect Ratio (EAR)</div>
+                <div class="card-value" id="ear-val" style="font-size: 1.5rem;">0.00</div>
+                <div style="width: 100%; height: 4px; background: #222; margin-top: 15px; border-radius: 2px;">
+                    <div id="ear-bar"
+                        style="width: 0%; height: 100%; background: var(--accent-primary); transition: width 0.3s; border-radius: 2px;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="btn btn-primary" onclick="location.reload()">Reset System</div>
+                <div class="btn" id="toggle-alert">Alert Mode: ON</div>
+            </div>
+        </aside>
+    </main>
+
+    <script>
+        async function fetchData() {
+            try {
+                let res = await fetch("/data");
+                let data = await res.json();
+
+                // Update Status
+                const statusText = document.getElementById("status-text");
+                const statusBadge = document.getElementById("status-badge");
+                const troubleshoot = document.getElementById("troubleshoot-overlay");
+                const connStatus = document.getElementById("connection-status");
+                
+                statusText.innerText = data.status || "UNKNOWN";
+                
+                if (data.status === "CAMERA_NOT_FOUND") {
+                    statusBadge.innerText = "OFFLINE";
+                    statusBadge.style.color = "var(--status-danger)";
+                    troubleshoot.style.display = "flex";
+                    connStatus.innerText = "NO HARDWARE DETECTED";
+                } else if (data.status === "CONNECTED") {
+                    statusBadge.innerText = "ONLINE";
+                    statusBadge.style.color = "var(--status-normal)";
+                    troubleshoot.style.display = "none";
+                    connStatus.innerText = "ACTIVE FEED";
+                }
+
+                // Update Driver State
+                document.getElementById("state").innerText = data.state;
+                document.getElementById("hr").innerText = data.hr || "--";
+                document.getElementById("ear-val").innerText = data.ear || "0.00";
+                document.getElementById("ear-bar").style.width = Math.min((data.ear / 0.4) * 100, 100) + "%";
+                
+                // Update badge and colors
+                const badge = document.getElementById("state-badge");
+                const dot = document.getElementById("status-dot");
+                
+                if (data.state === "DROWSY" || data.state === "DISTRACTED") {
+                    badge.style.background = "rgba(255, 71, 87, 0.1)";
+                    badge.style.color = "var(--status-danger)";
+                    dot.style.background = "var(--status-danger)";
+                    dot.style.boxShadow = "0 0 15px var(--status-danger)";
+                } else {
+                    badge.style.background = "rgba(0, 255, 136, 0.1)";
+                    badge.style.color = "var(--status-normal)";
+                    dot.style.background = "var(--status-normal)";
+                    dot.style.boxShadow = "0 0 15px var(--status-normal)";
+                }
+
+                // Heart rate animation speed based on HR
+                const heart = document.getElementById("heart-pulse");
+                if (data.hr > 0) {
+                    let speed = 60 / data.hr;
+                    heart.style.animationDuration = `${speed}s`;
+                }
+
+            } catch (e) {
+                console.error("Failed to fetch data", e);
+                document.getElementById("connection-status").innerText = "RECONNECTING...";
+            }
+        }
+
+
+        // Uptime counter
+        let startTime = Date.now();
+        function updateUptime() {
+            let diff = Math.floor((Date.now() - startTime) / 1000);
+            let h = Math.floor(diff / 3600).toString().padStart(2, '0');
+            let m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+            let s = (diff % 60).toString().padStart(2, '0');
+            document.getElementById("uptime").innerText = `Uptime: ${h}:${m}:${s}`;
+        }
+
+        // Update every 1000ms to reduce browser polling overhead
+        setInterval(fetchData, 1000);
+        setInterval(updateUptime, 1000);
+    </script>
+</body>
+
+</html>

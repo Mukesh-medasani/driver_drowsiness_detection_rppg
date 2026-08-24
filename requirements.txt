@@ -1,0 +1,8 @@
+opencv-python
+mediapipe
+scipy
+Flask
+numpy
+requests
+twilio
+statsmodels
